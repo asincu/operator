@@ -114,9 +114,9 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return fmt.Errorf("logcollector-controller failed to watch the node resource: %w", err)
 	}
 
-	if err = utils.AddLicenseWatch(c); err != nil {
-		return fmt.Errorf("logcollector-controller failed to watch LicenseKey resource: %v", err)
-	}
+	// if err = utils.AddLicenseWatch(c); err != nil {
+	// return fmt.Errorf("logcollector-controller failed to watch LicenseKey resource: %v", err)
+	// }
 	return nil
 }
 

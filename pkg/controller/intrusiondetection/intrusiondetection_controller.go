@@ -131,9 +131,11 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return fmt.Errorf("intrusiondetection-controller failed to watch the ConfigMap resource: %v", err)
 	}
 
-	if err = utils.AddLicenseWatch(c); err != nil {
-		return fmt.Errorf("intrusiondetection-controller failed to watch LicenseKey resource: %v", err)
-	}
+	// log.Info("[ALINA] Adding watch in intrusion detection")
+	// if err = utils.AddLicenseWatch(c); err != nil {
+	// log.Info("[ALINA] Fail to watch in intrusion detection")
+	// return fmt.Errorf("intrusiondetection-controller failed to watch LicenseKey resource: %v", err)
+	// }
 
 	return nil
 }
@@ -159,7 +161,7 @@ type ReconcileIntrusionDetection struct {
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileIntrusionDetection) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.Info("Reconciling IntrusionDetection")
+	reqLogger.Info("[ALINA] Reconciling IntrusionDetection")
 
 	// Fetch the IntrusionDetection instance
 	instance := &operatorv1.IntrusionDetection{}
@@ -301,7 +303,10 @@ func (r *ReconcileIntrusionDetection) Reconcile(ctx context.Context, request rec
 		return reconcile.Result{}, err
 	}
 
+	log.Info("[ALINA] Install or delete")
+
 	if !utils.IsFeatureActive(license, common.ThreatDefenseFeature) {
+		log.Info("[ALINA] Delete")
 		log.V(4).Info("IntrusionDetection is not activated as part of this license")
 		if err := handler.Delete(context.Background(), component, r.status); err != nil {
 			r.status.SetDegraded("Error deleting resource", err.Error())
@@ -311,6 +316,7 @@ func (r *ReconcileIntrusionDetection) Reconcile(ctx context.Context, request rec
 		return reconcile.Result{}, nil
 	}
 
+	log.Info("[ALINA] ")
 	if err := handler.CreateOrUpdate(context.Background(), component, r.status); err != nil {
 		r.status.SetDegraded("Error creating / updating resource", err.Error())
 		return reconcile.Result{}, err

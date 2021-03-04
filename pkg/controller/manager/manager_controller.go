@@ -150,9 +150,9 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return fmt.Errorf("manager-controller failed to watch the ConfigMap resource: %v", err)
 	}
 
-	if err = utils.AddLicenseWatch(c); err != nil {
-		return fmt.Errorf("manager-controller failed to watch LicenseKey resource: %v", err)
-	}
+	// if err = utils.AddLicenseWatch(c); err != nil {
+	// return fmt.Errorf("manager-controller failed to watch LicenseKey resource: %v", err)
+	// }
 	return nil
 }
 

@@ -63,6 +63,7 @@ func Add(mgr manager.Manager, opts options.AddOptions) error {
 		return err
 	}
 
+	log.Info("Starting to wait for calico apis")
 	go waitForRequiredAPIs(controller, reconciler)
 
 	return add(mgr, controller)
@@ -75,7 +76,8 @@ func waitForRequiredAPIs(controller controller.Controller, reconciler *Reconcile
 		select {
 		case <-ticker.C:
 			if err := utils.IsAPIServerConfigured(reconciler.client); err != nil {
-				log.Info("API server is configured")
+				log.Info("[ALINA]API server is configured")
+				log.Info("[ALINA] Adding watch in compliance")
 				if err := utils.AddLicenseWatch(controller); err != nil {
 					log.Info("Added Watch")
 					reconciler.ready <- true
