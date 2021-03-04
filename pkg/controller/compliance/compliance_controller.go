@@ -54,29 +54,55 @@ func Add(mgr manager.Manager, opts options.AddOptions) error {
 		// No need to start this controller.
 		return nil
 	}
-	return add(mgr, newReconciler(mgr, opts.DetectedProvider, opts.ClusterDomain))
+	// create the reconciler
+	reconciler := newReconciler(mgr, opts.DetectedProvider, opts.ClusterDomain)
+
+	// Create a new controller
+	controller, err := controller.New("compliance-controller", mgr, controller.Options{Reconciler: reconcile.Reconciler(reconciler)})
+	if err != nil {
+		return err
+	}
+
+	go waitForRequiredAPIs(controller, reconciler)
+
+	return add(mgr, controller)
+}
+
+func waitForRequiredAPIs(controller controller.Controller, reconciler *ReconcileCompliance) {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if err := utils.IsAPIServerConfigured(reconciler.client); err != nil {
+				log.Info("API server is configured")
+				if err := utils.AddLicenseWatch(controller); err != nil {
+					log.Info("Added Watch")
+					reconciler.ready <- true
+					return
+				}
+			}
+		}
+	}
 }
 
 // newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager, provider operatorv1.Provider, clusterDomain string) reconcile.Reconciler {
+func newReconciler(mgr manager.Manager, provider operatorv1.Provider, clusterDomain string) *ReconcileCompliance {
 	r := &ReconcileCompliance{
 		client:        mgr.GetClient(),
 		scheme:        mgr.GetScheme(),
 		provider:      provider,
 		status:        status.New(mgr.GetClient(), "compliance"),
 		clusterDomain: clusterDomain,
+		ready:         make(chan bool),
 	}
 	r.status.Run()
 	return r
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
-func add(mgr manager.Manager, r reconcile.Reconciler) error {
-	// Create a new controller
-	c, err := controller.New("compliance-controller", mgr, controller.Options{Reconciler: r})
-	if err != nil {
-		return err
-	}
+func add(mgr manager.Manager, c controller.Controller) error {
+	var err error
 
 	// Watch for changes to primary resource Compliance
 	err = c.Watch(&source.Kind{Type: &operatorv1.Compliance{}}, &handler.EnqueueRequestForObject{})
@@ -130,9 +156,9 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return fmt.Errorf("compliance-controller failed to watch resource: %w", err)
 	}
 
-	if err = utils.AddLicenseWatch(c); err != nil {
-		return fmt.Errorf("compliance-controller failed to watch LicenseKey resource: %v", err)
-	}
+	// if err = utils.AddLicenseWatch(c); err != nil {
+	// return fmt.Errorf("compliance-controller failed to watch LicenseKey resource: %v", err)
+	// }
 
 	return nil
 }
@@ -149,6 +175,7 @@ type ReconcileCompliance struct {
 	provider      operatorv1.Provider
 	status        status.StatusManager
 	clusterDomain string
+	ready         chan bool
 }
 
 func GetCompliance(ctx context.Context, cli client.Client) (*operatorv1.Compliance, error) {
@@ -185,6 +212,13 @@ func (r *ReconcileCompliance) Reconcile(ctx context.Context, request reconcile.R
 	}
 	r.status.OnCRFound()
 	reqLogger.V(2).Info("Loaded config", "config", instance)
+
+	select {
+	case <-r.ready:
+		break
+	default:
+		return reconcile.Result{}, nil
+	}
 
 	if !utils.IsAPIServerReady(r.client, reqLogger) {
 		r.status.SetDegraded("Waiting for Tigera API server to be ready", "")

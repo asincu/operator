@@ -34,7 +34,6 @@ import (
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	operatorv1 "github.com/tigera/operator/api/v1"
-	apiv1 "github.com/tigera/operator/pkg/apis/crd.projectcalico.org/v1"
 	"github.com/tigera/operator/pkg/render"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 )
@@ -116,8 +115,8 @@ func AddServiceWatch(c controller.Controller, name, namespace string) error {
 }
 
 func AddLicenseWatch(c controller.Controller) error {
-	lic := &apiv1.LicenseKey{
-		TypeMeta: metav1.TypeMeta{Kind: "LicenseKey"},
+	lic := &v3.LicenseKey{
+		TypeMeta: metav1.TypeMeta{Kind: "LicenseKey", APIVersion: "projectcalico.org"},
 	}
 	return c.Watch(&source.Kind{Type: lic}, &handler.EnqueueRequestForObject{})
 }
@@ -170,6 +169,19 @@ func IsAPIServerReady(client client.Client, l logr.Logger) bool {
 		return false
 	}
 	return true
+}
+
+func IsAPIServerConfigured(client client.Client) error {
+	instance := &operatorv1.APIServer{}
+	err := client.Get(context.Background(), DefaultTSEEInstanceKey, instance)
+	if err != nil {
+		return err
+	}
+
+	if instance.Status.State != operatorv1.TigeraStatusReady {
+		return fmt.Errorf("api server status not marked as ready")
+	}
+	return nil
 }
 
 func LogStorageExists(ctx context.Context, cli client.Client) (bool, error) {
