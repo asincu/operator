@@ -169,6 +169,8 @@ type ManagerConfiguration struct {
 	// Whether or not to run the rendered components in multi-tenant mode.
 	Tenant          *operatorv1.Tenant
 	ExternalElastic bool
+
+	Manager *operatorv1.Manager
 }
 
 type managerComponent struct {
@@ -323,6 +325,12 @@ func (c *managerComponent) managerDeployment() *appsv1.Deployment {
 			},
 			Template: *podTemplate,
 		},
+	}
+
+	if c.cfg.Manager != nil {
+		if overrides := c.cfg.Manager.Spec.ManagerDeployment; overrides != nil {
+			rcomponents.ApplyDeploymentOverrides(d, overrides)
+		}
 	}
 	return d
 }

@@ -677,6 +677,7 @@ func (r *ReconcileManager) Reconcile(ctx context.Context, request reconcile.Requ
 		Tenant:                  tenant,
 		ExternalElastic:         r.elasticExternal,
 		BindingNamespaces:       namespaces,
+		Manager:                 instance,
 	}
 
 	// Render the desired objects from the CRD and create or update them.
