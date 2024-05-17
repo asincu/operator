@@ -16,14 +16,16 @@ package kubecontrollers
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/tigera/api/pkg/lib/numorstring"
 
 	"github.com/tigera/operator/pkg/common"
 	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 
 	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
-	"github.com/tigera/operator/pkg/url"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -47,6 +49,7 @@ import (
 	"github.com/tigera/operator/pkg/render/common/securitycontext"
 	"github.com/tigera/operator/pkg/render/monitor"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
+	opurl "github.com/tigera/operator/pkg/url"
 )
 
 const (
@@ -109,6 +112,8 @@ type KubeControllersConfiguration struct {
 	// Tenant object provides tenant configuration for both single and multi-tenant modes.
 	// If this is nil, then we should run in zero-tenant mode.
 	Tenant *operatorv1.Tenant
+
+	ExternalElasticURL *url.URL
 }
 
 func NewCalicoKubeControllers(cfg *KubeControllersConfiguration) *kubeControllersComponent {
@@ -221,7 +226,7 @@ func NewElasticsearchKubeControllers(cfg *KubeControllersConfiguration) *kubeCon
 			enabledControllers = append(enabledControllers, "managedcluster")
 		}
 	} else {
-		enabledControllers = append(enabledControllers, "managedclusterlicensing")
+		enabledControllers = append(enabledControllers, "authorization", "managedclusterlicensing")
 	}
 
 	return &kubeControllersComponent{
@@ -640,7 +645,7 @@ func (c *kubeControllersComponent) controllersDeployment() *appsv1.Deployment {
 	}
 
 	if c.kubeControllerName == EsKubeController && !c.cfg.Tenant.MultiTenant() {
-		_, esHost, esPort, _ := url.ParseEndpoint(relasticsearch.GatewayEndpoint(c.SupportedOSType(), c.cfg.ClusterDomain, render.ElasticsearchNamespace))
+		_, esHost, esPort, _ := opurl.ParseEndpoint(relasticsearch.GatewayEndpoint(c.SupportedOSType(), c.cfg.ClusterDomain, render.ElasticsearchNamespace))
 		container.Env = append(container.Env, []corev1.EnvVar{
 			relasticsearch.ElasticHostEnvVar(esHost),
 			relasticsearch.ElasticPortEnvVar(esPort),
@@ -882,6 +887,17 @@ func esKubeControllersAllowTigeraPolicy(cfg *KubeControllersConfiguration) *v3.N
 				Destination: networkpolicy.DefaultHelper().ESGatewayEntityRule(),
 			},
 		}...)
+	} else {
+		egressRules = append(egressRules,
+			v3.Rule{
+				Action:   v3.Allow,
+				Protocol: &networkpolicy.TCPProtocol,
+				Destination: v3.EntityRule{
+					Ports:   []numorstring.Port{{MinPort: 443, MaxPort: 443}},
+					Domains: []string{cfg.ExternalElasticURL.Hostname()},
+				},
+			},
+		)
 	}
 
 	networkpolicyHelper := networkpolicy.Helper(cfg.Tenant.MultiTenant(), cfg.Namespace)
